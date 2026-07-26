@@ -62,6 +62,14 @@ def iniciar_bot_trading():
     ACCOUNT_ID = int(os.getenv("NOTBANK_ACCOUNT_ID"))
     MONTO_A_INVERTIR_CLP = Decimal("50000") # $50.000 CLP fijos por operación
     
+    # NUEVO: Leer si estamos en modo prueba (Por defecto True si no se define en el .env)
+    MODO_PRUEBA = os.getenv("PAPER_TRADING", "True").lower() == "true"
+    
+    if MODO_PRUEBA:
+        print("⚠️ ATENCIÓN: Iniciando en MODO PRUEBA (Paper Trading). No se arriesgará capital real.")
+    else:
+        print("🚨 ALERTA: Iniciando en MODO REAL. Las órdenes se enviarán al exchange.")
+    
     # 2. Conectar y autenticar cliente de Notbank
     connection = new_rest_client_connection("api.notbank.exchange")
     client = NotbankClient(connection)
@@ -119,25 +127,32 @@ def iniciar_bot_trading():
                     
                     # D) FILTRO MATEMÁTICO INSTITUCIONAL Y EJECUCIÓN
                     if rentabilidad_esperada > porcentaje_costo:
-                        print(" -> [SEÑAL VÁLIDA] El EV supera los costos. Ejecutando orden de compra...")
+                        print(" -> [SEÑAL VÁLIDA] El EV supera los costos.")
                         
-                        respuesta_compra = comprar_btc_por_monto_clp(
-                            client=client,
-                            account_id=ACCOUNT_ID,
-                            monto_clp=MONTO_A_INVERTIR_CLP,
-                            precio_btc=precio_btc
-                        )
-                        print(f" -> [ORDEN ENVIADA] Estado: {respuesta_compra.status}, ID de Orden: {respuesta_compra.order_id}")
-                        
-                        # E) PROTECCIÓN OCO (Take Profit y Stop Loss)
-                        if getattr(respuesta_compra, "status", None) == "Accepted":
-                            colocar_take_profit_y_stop_loss(
+                        if MODO_PRUEBA:
+                            # Gatillo de Salva (Simulación)
+                            print(f" -> [PAPER TRADING] Compra simulada de {cantidad_estimada:.6f} BTC a {precio_btc:,.0f} CLP.")
+                            print(f" -> [PAPER TRADING] OCO (Take Profit / Stop Loss) Simulado configurado con éxito.")
+                        else:
+                            # Gatillo Real (Dinero Real)
+                            print(" -> Ejecutando orden de compra real...")
+                            respuesta_compra = comprar_btc_por_monto_clp(
                                 client=client,
                                 account_id=ACCOUNT_ID,
-                                quantity=cantidad_estimada,
-                                precio_compra=precio_btc,
-                                rentabilidad_esperada=rentabilidad_esperada
+                                monto_clp=MONTO_A_INVERTIR_CLP,
+                                precio_btc=precio_btc
                             )
+                            print(f" -> [ORDEN ENVIADA] Estado: {respuesta_compra.status}, ID de Orden: {respuesta_compra.order_id}")
+                            
+                            # E) PROTECCIÓN OCO (Take Profit y Stop Loss)
+                            if getattr(respuesta_compra, "status", None) == "Accepted":
+                                colocar_take_profit_y_stop_loss(
+                                    client=client,
+                                    account_id=ACCOUNT_ID,
+                                    quantity=cantidad_estimada,
+                                    precio_compra=precio_btc,
+                                    rentabilidad_esperada=rentabilidad_esperada
+                                )
                         
                     else:
                         print(" -> [RECHAZO] Las comisiones absorben la ganancia. Abortando operación.")
