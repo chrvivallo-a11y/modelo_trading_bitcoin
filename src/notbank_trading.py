@@ -1,10 +1,10 @@
 # Archivo: src/notbank_trading.py
 
 from decimal import Decimal
-from notbank_python_sdk.notbank_client import NotbankClient[cite: 1]
-from notbank_python_sdk.constants import Side, OrderType, TimeInForce, MakerTaker[cite: 1]
-from notbank_python_sdk.requests_models import SendOrderRequest, GetOrderFeeRequest[cite: 1]
-from notbank_python_sdk.models.send_order import SendOrderResponse[cite: 1]
+from notbank_python_sdk.notbank_client import NotbankClient
+from notbank_python_sdk.constants import Side, OrderType, TimeInForce, MakerTaker
+from notbank_python_sdk.requests_models import SendOrderRequest, GetOrderFeeRequest
+from notbank_python_sdk.models.send_order import SendOrderResponse
 
 def comprar_btc_por_monto_clp(
     client: NotbankClient,
@@ -21,7 +21,7 @@ def comprar_btc_por_monto_clp(
     cantidad_btc = monto_clp / precio_btc
     
     # 2. Obtener el instrumento correspondiente al par
-    instrument = client.get_instrument_by_symbol(symbol)[cite: 1]
+    instrument = client.get_instrument_by_symbol(symbol)
     
     # 3. Construir la solicitud de orden de compra
     request = SendOrderRequest(
@@ -32,10 +32,10 @@ def comprar_btc_por_monto_clp(
         order_type=OrderType.LIMIT,
         quantity=cantidad_btc,
         limit_price=precio_btc
-    )[cite: 1]
+    )
     
     # 4. Enviar la orden
-    return client.send_order(request)[cite: 1]
+    return client.send_order(request)
 
 
 def vender_btc(
@@ -49,7 +49,7 @@ def vender_btc(
     Crea una orden limite de VENTA de Bitcoin a CLP.
     """
     # 1. Obtener el instrumento correspondiente al par
-    instrument = client.get_instrument_by_symbol(symbol)[cite: 1]
+    instrument = client.get_instrument_by_symbol(symbol)
     
     # 2. Construir la solicitud de orden de venta
     request = SendOrderRequest(
@@ -60,10 +60,10 @@ def vender_btc(
         order_type=OrderType.LIMIT,
         quantity=quantity,
         limit_price=price
-    )[cite: 1]
+    )
     
     # 3. Enviar la orden
-    return client.send_order(request)[cite: 1]
+    return client.send_order(request)
 
 
 def consultar_costo_orden(
@@ -87,10 +87,10 @@ def consultar_costo_orden(
         order_type=OrderType.LIMIT,
         maker_taker=maker_taker, 
         side=side
-    )[cite: 1]
+    )
     
     # 2. Obtener la respuesta de la API
-    fee_response = client.get_order_fee(request)[cite: 1]
+    fee_response = client.get_order_fee(request)
     
     # 3. Retornar el costo operativo
     return fee_response.order_fee
@@ -108,7 +108,7 @@ def colocar_take_profit_y_stop_loss(
     Envía dos órdenes vinculadas (OCO): un Take Profit y un Stop Loss.
     Si una se ejecuta, la otra se cancela automáticamente en el exchange.
     """
-    instrument = client.get_instrument_by_symbol(symbol)[cite: 1]
+    instrument = client.get_instrument_by_symbol(symbol)
     
     # 1. Definir los niveles de precio
     precio_tp = precio_compra * (Decimal("1") + rentabilidad_esperada)
@@ -125,8 +125,8 @@ def colocar_take_profit_y_stop_loss(
         order_type=OrderType.LIMIT,
         quantity=quantity,
         limit_price=precio_tp
-    )[cite: 1]
-    tp_response = client.send_order(tp_request)[cite: 1]
+    )
+    tp_response = client.send_order(tp_request)
     
     # 3. Enviar Orden Stop Market de Venta (Stop Loss) vinculada al TP
     if getattr(tp_response, "status", None) == "Accepted":
@@ -139,8 +139,8 @@ def colocar_take_profit_y_stop_loss(
             quantity=quantity,
             stop_price=precio_sl,
             order_id_oco=tp_response.order_id
-        )[cite: 1]
-        sl_response = client.send_order(sl_request)[cite: 1]
+        )
+        sl_response = client.send_order(sl_request)
         
         print(f" -> [OCO ACTIVADO] TP ID: {tp_response.order_id} | SL ID: {sl_response.order_id}")
         return True
