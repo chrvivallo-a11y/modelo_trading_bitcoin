@@ -6,6 +6,7 @@ from decimal import Decimal
 from datetime import datetime
 import pandas as pd
 import numpy as np
+from dotenv import load_dotenv
 
 # SDK de Notbank[cite: 1]
 from notbank_python_sdk.notbank_client import NotbankClient
@@ -13,17 +14,16 @@ from notbank_python_sdk.client_connection_factory import new_rest_client_connect
 from notbank_python_sdk.requests_models.authenticate_request import AuthenticateRequest
 from notbank_python_sdk.constants import Side
 
-# Tus módulos locales[cite: 2]
+# Tus módulos locales (Asegúrate de que estén en la misma carpeta 'src/')[cite: 2]
 from notbank_trading import comprar_btc_por_monto_clp, consultar_costo_orden
 from agregacion_15m import procesar_velas_15m
 
-# Módulos de Machine Learning (simulando que cargas tu modelo guardado)
-import joblib 
+# Módulos de Machine Learning (Simulando que cargas el modelo entrenado con joblib)
+# import joblib 
 
 def cargar_modelos_entrenados():
-    """Carga los modelos que entrenaste previamente en modelo_ensamblado.py"""
-    # En producción real usarías joblib.load('models/meta_learner.pkl')
-    # Aquí simulamos una carga exitosa
+    """Carga los modelos que entrenaste previamente (Meta-Learner, RF, DNN, Scaler)."""
+    # En producción real usarías: modelo = joblib.load('../models/meta_learner.pkl')
     print("Modelos cargados en memoria (RF, DNN, Meta-Learner, Scaler).")
     return {"meta_learner": "modelo_cargado"} 
 
@@ -31,15 +31,15 @@ def obtener_prediccion_actual(modelos, ruta_trades):
     """
     Lee los últimos 15 minutos de datos, los transforma y hace la predicción.
     """
-    # Usamos tu agregador para sacar la última vela
+    # Usamos tu agregador para construir la última vela con sus indicadores
     df_15m = procesar_velas_15m(ruta_trades)
     ultima_vela = df_15m.iloc[[-1]]
     
-    # Aquí pasarías 'ultima_vela' por el RF, la DNN y finalmente el Meta-Learner
-    # Simulemos que el Meta-Learner nos predice un retorno positivo del 0.45%
+    # Aquí el modelo evaluaría 'ultima_vela'. 
+    # Simulemos que el Meta-Learner predice un retorno positivo (ganancia) del 0.45%
     rentabilidad_predicha = Decimal("0.0045") 
     
-    # También necesitamos el precio de cierre actual para simular la compra
+    # Obtenemos el precio de cierre de la vela para simular la compra
     precio_actual = Decimal(str(ultima_vela['close'].values[0]))
     
     return rentabilidad_predicha, precio_actual
@@ -47,13 +47,20 @@ def obtener_prediccion_actual(modelos, ruta_trades):
 def iniciar_bot_trading():
     print("=== Iniciando Bot de Producción 15m ===")
     
-    # 1. Configurar credenciales (Reemplazar con lectura de .env)
-    API_KEY = os.getenv("NOTBANK_API_PUBLIC_KEY", "TU_API_KEY")
-    SECRET_KEY = os.getenv("NOTBANK_API_SECRET_KEY", "TU_SECRET_KEY")
-    USER_ID = os.getenv("NOTBANK_USER_ID", "TU_USER_ID")
-    ACCOUNT_ID = int(os.getenv("NOTBANK_ACCOUNT_ID", "12345"))
+    # 1. Cargar las variables desde el archivo .env de forma segura
+    load_dotenv()
     
-    MONTO_A_INVERTIR_CLP = Decimal("50000") # $50.000 CLP por operación
+    API_KEY = os.getenv("NOTBANK_API_PUBLIC_KEY")
+    SECRET_KEY = os.getenv("NOTBANK_API_SECRET_KEY")
+    USER_ID = os.getenv("NOTBANK_USER_ID")
+    
+    # Verificamos que las credenciales existan para no operar a ciegas
+    if not all([API_KEY, SECRET_KEY, USER_ID, os.getenv("NOTBANK_ACCOUNT_ID")]):
+        print("Error Crítico: Faltan credenciales en el archivo .env")
+        return
+        
+    ACCOUNT_ID = int(os.getenv("NOTBANK_ACCOUNT_ID"))
+    MONTO_A_INVERTIR_CLP = Decimal("50000") # $50.000 CLP fijos por operación
     
     # 2. Conectar y autenticar cliente de Notbank[cite: 1]
     connection = new_rest_client_connection("api.notbank.exchange")
@@ -66,33 +73,35 @@ def iniciar_bot_trading():
     ))
     
     if not auth_response.authenticated:
-        print("Error crítico: No se pudo autenticar con Notbank.")
+        print(f"Error crítico: No se pudo autenticar con Notbank. Razón: {auth_response.errormsg}")
         return
 
     # 3. Cargar el "cerebro"
     modelos = cargar_modelos_entrenados()
+    
+    # Ruta dinámica para leer el CSV que está generando el script recolector en tiempo real
     ruta_trades_actual = f"../data/trades_{datetime.now().date()}.csv"
     
     print("Bot activo y esperando cierre de velas de 15m...")
 
-    # 4. Bucle principal (Loop de 15 minutos)
+    # 4. Bucle principal (Loop de evaluación de 15 minutos)
     try:
         while True:
             minuto_actual = datetime.now().minute
             segundo_actual = datetime.now().second
             
-            # El bot solo actúa cuando cierra la vela (minutos 00, 15, 30, 45)
+            # El bot actúa exactamente cuando cierra la vela (minutos 00, 15, 30, 45)
             if minuto_actual % 15 == 0 and segundo_actual < 5:
-                print(f"\n[{datetime.now()}] Evaluando mercado...")
+                print(f"\n[{datetime.now()}] Evaluando el mercado...")
                 
                 # A) El modelo predice la rentabilidad y nos da el precio actual
                 rentabilidad_esperada, precio_btc = obtener_prediccion_actual(modelos, ruta_trades_actual)
                 
                 if rentabilidad_esperada > 0:
-                    # B) Calculamos cantidad que queremos comprar
+                    # B) Calculamos cantidad que queremos comprar (BTC)
                     cantidad_estimada = MONTO_A_INVERTIR_CLP / precio_btc
                     
-                    # C) Consultamos costo REAL a Notbank[cite: 1, 2]
+                    # C) Consultamos costo REAL a la API de Notbank[cite: 1, 2]
                     costo_compra_clp = consultar_costo_orden(
                         client=client,
                         account_id=ACCOUNT_ID,
@@ -101,32 +110,36 @@ def iniciar_bot_trading():
                         side=Side.BUY
                     )
                     
-                    # Asumimos que la venta costará similar (Ida y Vuelta)
+                    # Asumimos que la comisión de venta será similar (Ida y Vuelta)
                     costo_total_estimado_clp = costo_compra_clp * 2
                     porcentaje_costo = costo_total_estimado_clp / MONTO_A_INVERTIR_CLP
                     
-                    print(f" -> Predicción (EV): +{rentabilidad_esperada * 100:.2f}%")
-                    print(f" -> Costo Operativo (API): {porcentaje_costo * 100:.2f}%")
+                    print(f" -> Predicción (Valor Esperado): +{rentabilidad_esperada * 100:.2f}%")
+                    print(f" -> Costo Operativo Real (API): {porcentaje_costo * 100:.2f}%")
                     
                     # D) FILTRO MATEMÁTICO INSTITUCIONAL
                     if rentabilidad_esperada > porcentaje_costo:
-                        print(" -> [SEÑAL VÁLIDA] EV supera costos. Ejecutando compra...")
+                        print(" -> [SEÑAL VÁLIDA] El EV supera los costos. Ejecutando orden de compra...")
+                        
                         respuesta = comprar_btc_por_monto_clp(
                             client=client,
                             account_id=ACCOUNT_ID,
                             monto_clp=MONTO_A_INVERTIR_CLP,
                             precio_btc=precio_btc
                         )
-                        print(f" -> [ORDEN ENVIADA] Estado: {respuesta.status}, ID: {respuesta.order_id}[cite: 1]")
+                        print(f" -> [ORDEN ENVIADA] Estado: {respuesta.status}, ID de Orden: {respuesta.order_id}[cite: 1]")
+                        
+                        # Si la orden se ejecuta, podrías agregar aquí la lógica de crear la orden de Take Profit (Venta)
+                        
                     else:
-                        print(" -> [RECHAZO] Las comisiones absorben la ganancia. Abortando.")
+                        print(" -> [RECHAZO] Las comisiones absorben la ganancia. Abortando operación.")
                 else:
-                    print(" -> [RECHAZO] Predicción bajista o neutral.")
+                    print(" -> [RECHAZO] Predicción bajista o neutral. Fuera del mercado.")
                 
-                # Pausar un poco para no ejecutar múltiples veces en el mismo segundo 00
+                # Pausar para evitar múltiples evaluaciones dentro de los mismos primeros 5 segundos del minuto
                 time.sleep(10)
             
-            # Revisar el reloj cada segundo
+            # Revisar el reloj 1 vez por segundo
             time.sleep(1)
             
     except KeyboardInterrupt:
