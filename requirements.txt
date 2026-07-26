@@ -1,7 +1,7 @@
 # Archivo: .env.example
 
 # Credenciales de API Notbank (Solo lectura para recolectar, Trading para operar)
-NOTBANK_API_PUBLIC_KEY=tu_public_key_aqui
-NOTBANK_API_SECRET_KEY=tu_secret_key_aqui
-NOTBANK_USER_ID=tu_user_id_aqui
-NOTBANK_ACCOUNT_ID=tu_account_id_aqui
+NOTBANK_API_PUBLIC_KEY=eb40297cfd68cb8c116a648a34102fa4
+NOTBANK_API_SECRET_KEY=5a6ce36894d547c46b5b1f5a1d4def7b
+NOTBANK_USER_ID=358321
+NOTBANK_ACCOUNT_ID=1428946
