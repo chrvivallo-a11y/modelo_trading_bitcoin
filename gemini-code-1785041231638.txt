@@ -1,0 +1,26 @@
+# Archivo: .gitignore
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+ENV/
+
+# Archivos de caché y compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Archivos de configuración y secretos (¡CRÍTICO!)
+.env
+keys.json
+local_settings.py
+
+# Carpetas de datos y modelos locales
+data/
+models/
+
+# Archivos de SO
+.DS_Store
+Thumbs.db
