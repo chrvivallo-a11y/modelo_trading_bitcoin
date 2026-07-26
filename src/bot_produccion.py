@@ -8,14 +8,14 @@ import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
 
-# SDK de Notbank[cite: 1]
+# SDK de Notbank
 from notbank_python_sdk.notbank_client import NotbankClient
 from notbank_python_sdk.client_connection_factory import new_rest_client_connection
 from notbank_python_sdk.requests_models.authenticate_request import AuthenticateRequest
 from notbank_python_sdk.constants import Side
 
-# Tus módulos locales (Asegúrate de que estén en la misma carpeta 'src/')[cite: 2]
-from notbank_trading import comprar_btc_por_monto_clp, consultar_costo_orden
+# Tus módulos locales (Asegúrate de que estén en la misma carpeta 'src/')
+from notbank_trading import comprar_btc_por_monto_clp, consultar_costo_orden, colocar_take_profit_y_stop_loss
 from agregacion_15m import procesar_velas_15m
 
 # Módulos de Machine Learning (Simulando que cargas el modelo entrenado con joblib)
@@ -62,7 +62,7 @@ def iniciar_bot_trading():
     ACCOUNT_ID = int(os.getenv("NOTBANK_ACCOUNT_ID"))
     MONTO_A_INVERTIR_CLP = Decimal("50000") # $50.000 CLP fijos por operación
     
-    # 2. Conectar y autenticar cliente de Notbank[cite: 1]
+    # 2. Conectar y autenticar cliente de Notbank
     connection = new_rest_client_connection("api.notbank.exchange")
     client = NotbankClient(connection)
     
@@ -101,7 +101,7 @@ def iniciar_bot_trading():
                     # B) Calculamos cantidad que queremos comprar (BTC)
                     cantidad_estimada = MONTO_A_INVERTIR_CLP / precio_btc
                     
-                    # C) Consultamos costo REAL a la API de Notbank[cite: 1, 2]
+                    # C) Consultamos costo REAL a la API de Notbank
                     costo_compra_clp = consultar_costo_orden(
                         client=client,
                         account_id=ACCOUNT_ID,
@@ -117,19 +117,27 @@ def iniciar_bot_trading():
                     print(f" -> Predicción (Valor Esperado): +{rentabilidad_esperada * 100:.2f}%")
                     print(f" -> Costo Operativo Real (API): {porcentaje_costo * 100:.2f}%")
                     
-                    # D) FILTRO MATEMÁTICO INSTITUCIONAL
+                    # D) FILTRO MATEMÁTICO INSTITUCIONAL Y EJECUCIÓN
                     if rentabilidad_esperada > porcentaje_costo:
                         print(" -> [SEÑAL VÁLIDA] El EV supera los costos. Ejecutando orden de compra...")
                         
-                        respuesta = comprar_btc_por_monto_clp(
+                        respuesta_compra = comprar_btc_por_monto_clp(
                             client=client,
                             account_id=ACCOUNT_ID,
                             monto_clp=MONTO_A_INVERTIR_CLP,
                             precio_btc=precio_btc
                         )
-                        print(f" -> [ORDEN ENVIADA] Estado: {respuesta.status}, ID de Orden: {respuesta.order_id}[cite: 1]")
+                        print(f" -> [ORDEN ENVIADA] Estado: {respuesta_compra.status}, ID de Orden: {respuesta_compra.order_id}")
                         
-                        # Si la orden se ejecuta, podrías agregar aquí la lógica de crear la orden de Take Profit (Venta)
+                        # E) PROTECCIÓN OCO (Take Profit y Stop Loss)
+                        if getattr(respuesta_compra, "status", None) == "Accepted":
+                            colocar_take_profit_y_stop_loss(
+                                client=client,
+                                account_id=ACCOUNT_ID,
+                                quantity=cantidad_estimada,
+                                precio_compra=precio_btc,
+                                rentabilidad_esperada=rentabilidad_esperada
+                            )
                         
                     else:
                         print(" -> [RECHAZO] Las comisiones absorben la ganancia. Abortando operación.")
