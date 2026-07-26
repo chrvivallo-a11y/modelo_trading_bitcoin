@@ -1,4 +1,5 @@
-certifi>=2025.7.9
+# SDK de Notbank original
+certifi==2025.7.9
 charset-normalizer==2.0.12
 dacite==1.9.2
 idna==3.3
@@ -7,6 +8,8 @@ simplejson==3.20.1
 typing-extensions==4.7.1
 urllib3==1.26.9
 websocket-client==1.6.1
+
+# Agregados para tu Bot Cuantitativo
 pandas>=2.0.0
 numpy>=1.24.0
 python-dotenv>=1.0.0
